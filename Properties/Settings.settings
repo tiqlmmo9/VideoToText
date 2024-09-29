@@ -1,0 +1,35 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="VideoToText.Properties" GeneratedClassName="Settings">
+  <Profiles />
+  <Settings>
+    <Setting Name="PlaylistId" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="VideoId" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="OutputPath" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="ApiKey" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="LogText" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="IsPlaylistChecked" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="Prompt" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Tôi là một Phật tử theo truyền thống Phật giáo Nguyên thủy Theravada đang ghi chép bài giảng của Sư. Hãy thực hiện các nhiệm vụ sau với file âm thanh đính kèm:
+1. Chuyển đổi toàn bộ nội dung âm thanh thành văn bản. 
+2. Loại bỏ các từ không cần thiết thường xuất hiện trong văn nói như từ đệm, từ lặp, hoặc các cụm từ trong văn nói. 
+3. Sắp xếp và định dạng lại nội dung thành các đoạn văn có cấu trúc rõ ràng, mạch lạc. 
+4. Đảm bảo kết quả cuối cùng dễ đọc và dễ hiểu nhất có thể, trong khi vẫn giữ nguyên ý nghĩa chính của nội dung gốc. 
+5. Nếu có bất kỳ thuật ngữ hoặc khái niệm nào liên quan đến Phật giáo Nguyên thủy Theravada, hãy chú ý giữ nguyên và sử dụng chính xác.</Value>
+    </Setting>
+    <Setting Name="SelectedModel" Type="System.String" Scope="User">
+      <Value Profile="(Default)">gemini-1.5-pro-002</Value>
+    </Setting>
+  </Settings>
+</SettingsFile>
