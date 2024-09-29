@@ -431,7 +431,7 @@ namespace VideoToText
                 int index = 1;
                 AppendLog($"Starting conversion of MP3 to text for file: '{fileName}'.");
 
-                using (var writer = new StreamWriter(outputPath, append: true, Encoding.UTF8))
+                using (var writer = new StreamWriter(outputPath, append: false, Encoding.UTF8))
                 {
                     while (true)
                     {
@@ -452,7 +452,7 @@ namespace VideoToText
                             tokenCount += response?.UsageMetadata?.CandidatesTokenCount ?? 0;
 
                             await writer.WriteAsync(response.Text);
-                            await writer.FlushAsync();
+                            writer.Flush();
                         }
 
                         if (tokenCount < MaxOutputTokens)
