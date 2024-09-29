@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VideoToText")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9315661725867ef3fb12e4b182144bb52c04eb00")]
 [assembly: System.Reflection.AssemblyProductAttribute("VideoToText")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VideoToText")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

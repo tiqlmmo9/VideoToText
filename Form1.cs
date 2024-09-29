@@ -500,12 +500,12 @@ namespace VideoToText
                             File.Delete(failedOutputPath);
                         }
                         File.Move(outputPath, failedOutputPath);
-                        AppendLog($"Conversion failed for file: '{fileName}'. \r\nOutput saved at: '{failedOutputPath}'.");
+                        AppendLog($"\r\nConversion failed for file: '{fileName}'. \r\nOutput saved at: '{failedOutputPath}'.");
                     }
                 }
                 catch (Exception renameEx)
                 {
-                    AppendLog($"Failed to rename output file after error: {renameEx.Message}");
+                    AppendLog($"\r\nFailed to rename output file after error: {renameEx.Message}");
                 }
                 finally
                 {

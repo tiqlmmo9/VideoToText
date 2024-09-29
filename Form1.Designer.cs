@@ -41,7 +41,14 @@ namespace VideoToText
 
         private void LoadSettings()
         {
+            // Restore CheckBox state
+            payAsYouGoCheckBox.Checked = Properties.Settings.Default.IsPayAsYouGo;
+            freeCheckBox.Checked = !Properties.Settings.Default.IsPayAsYouGo;
+
             playlistIdTextBox.Text = Properties.Settings.Default.PlaylistId;
+            numericUpDownStart.Value = Properties.Settings.Default.StartIndex;
+            numericUpDownEnd.Value = Properties.Settings.Default.EndIndex;
+
             outputPathTextBox.Text = Properties.Settings.Default.OutputPath;
             videoIdTextBox.Text = Properties.Settings.Default.VideoId;
             apiKeyTextBox.Text = Properties.Settings.Default.ApiKey;
@@ -55,10 +62,6 @@ namespace VideoToText
             // Restore ComboBox state
             modelComboBox.SelectedItem = Properties.Settings.Default.SelectedModel;
 
-            // Restore CheckBox state
-            payAsYouGoCheckBox.Checked = Properties.Settings.Default.IsPayAsYouGo;
-            freeCheckBox.Checked = !Properties.Settings.Default.IsPayAsYouGo;
-
             // Update visibility based on radio button state
             radioPlaylist_CheckedChanged(null, null);
         }
@@ -71,12 +74,17 @@ namespace VideoToText
         private void SaveSettings()
         {
             Properties.Settings.Default.PlaylistId = playlistIdTextBox.Text;
+
+            Properties.Settings.Default.StartIndex = numericUpDownStart.Value;
+            Properties.Settings.Default.EndIndex = numericUpDownEnd.Value;
+
             Properties.Settings.Default.OutputPath = outputPathTextBox.Text;
             Properties.Settings.Default.VideoId = videoIdTextBox.Text;
             Properties.Settings.Default.ApiKey = apiKeyTextBox.Text;
             Properties.Settings.Default.LogText = logTextBox.Text;
             Properties.Settings.Default.Prompt = promptTextBox.Text;
             Properties.Settings.Default.IsPlaylistChecked = radioPlaylist.Checked;
+
             Properties.Settings.Default.SelectedModel = modelComboBox.SelectedItem.ToString();
             // Save CheckBox state
             Properties.Settings.Default.IsPayAsYouGo = payAsYouGoCheckBox.Checked;

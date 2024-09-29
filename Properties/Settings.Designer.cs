@@ -135,5 +135,29 @@ namespace VideoToText.Properties {
                 this["IsPayAsYouGo"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("1")]
+        public decimal StartIndex {
+            get {
+                return ((decimal)(this["StartIndex"]));
+            }
+            set {
+                this["StartIndex"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("2")]
+        public decimal EndIndex {
+            get {
+                return ((decimal)(this["EndIndex"]));
+            }
+            set {
+                this["EndIndex"] = value;
+            }
+        }
     }
 }
