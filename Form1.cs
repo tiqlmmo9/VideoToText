@@ -28,6 +28,7 @@ namespace VideoToText
         private System.Threading.Timer rpmTimer;
         private int rpmLimit;
         private int rpmCounter;
+        private int timerIntervalMilliseconds = 60_000;
 
         private void InitializeGenerativeAI()
         {
@@ -58,23 +59,24 @@ namespace VideoToText
             // Initialize the semaphore based on the selected model
             if (modelComboBox.Text == Model.Gemini15Flash002)
             {
-                if (isPayAsYouGo)
-                {
-                    semaphore = new SemaphoreSlim(2000, 2000); // 2,000 RPM for flash Pay-as-you-go
-                    rpmLimit = 2000;
-                }
-                else
-                {
-                    semaphore = new SemaphoreSlim(15, 15); // 15 RPM for flash free
-                    rpmLimit = 15;
-                }
+                //semaphore = new SemaphoreSlim(2000, 2000); // 2,000 RPM for flash Pay-as-you-go
+                //rpmLimit = 2000;
+
+                //semaphore = new SemaphoreSlim(15, 15); // 15 RPM for flash free
+                //rpmLimit = 15;
+
+                semaphore = new SemaphoreSlim(10, 10);
+                rpmLimit = 10;
             }
             else if (modelComboBox.Text == Model.Gemini15Pro002)
             {
                 if (isPayAsYouGo)
                 {
-                    semaphore = new SemaphoreSlim(1000, 1000); // 1,000 RPM for pro Pay-as-you-go
-                    rpmLimit = 1000;
+                    //semaphore = new SemaphoreSlim(1000, 1000); // 1,000 RPM for pro Pay-as-you-go
+                    //rpmLimit = 1000;
+
+                    semaphore = new SemaphoreSlim(10, 10);
+                    rpmLimit = 10;
                 }
                 else
                 {
@@ -84,7 +86,7 @@ namespace VideoToText
             }
 
             // Initialize RPM timer
-            rpmTimer = new System.Threading.Timer(ResetRpmCounter, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+            rpmTimer = new System.Threading.Timer(ResetRpmCounter, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(timerIntervalMilliseconds));
         }
 
         private void ResetRpmCounter(object state)
@@ -420,12 +422,6 @@ namespace VideoToText
             {
                 await semaphore.WaitAsync(cancellationToken); // Wait for the semaphore
 
-                // Respect RPM limit
-                while (Interlocked.Increment(ref rpmCounter) > rpmLimit)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                }
-
                 var uploadMediaResponse = await model.UploadFile(inputPath, cancellationToken: cancellationToken);
                 AppendLog($"Upload of file: '{fileName}' completed successfully.");
 
@@ -448,7 +444,14 @@ namespace VideoToText
                 {
                     while (true)
                     {
+                        // Respect RPM limit
+                        while (Interlocked.Increment(ref rpmCounter) > rpmLimit)
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                        }
+
                         var responseStream = model.GenerateContentStream(request, cancellationToken: cancellationToken);
+
                         StringBuilder responseBuilder = new();
                         int tokenCount = 0;
 
@@ -509,6 +512,7 @@ namespace VideoToText
                 }
                 finally
                 {
+                    await Task.Delay(timerIntervalMilliseconds);
                     semaphore.Release(); // Release the semaphore
                 }
             }
