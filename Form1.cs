@@ -1,4 +1,5 @@
 using FFMpegCore;
+using Google.Apis.YouTube.v3.Data;
 using Mscc.GenerativeAI;
 using System.Data;
 using System.Text;
@@ -163,7 +164,12 @@ namespace VideoToText
                     // ----------- CONVERT MP3 TO TEXT -----------
 
                     var tasks = new List<Task>();
-                    foreach (var filePath in Directory.GetFiles(convertedAudiosOutputPath))
+
+                    var filteredFiles = Directory.GetFiles(convertedAudiosOutputPath)
+                                                 .Where(file => urls.ToList().Exists(url => file.Contains(url)))
+                                                 .ToList();
+
+                    foreach (var filePath in filteredFiles)
                     {
                         string fileName = Path.GetFileNameWithoutExtension(filePath);
                         string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
@@ -222,7 +228,14 @@ namespace VideoToText
                         // ----------- CONVERT MP3 TO TEXT -----------
 
                         var tasks = new List<Task>();
-                        foreach (var filePath in Directory.GetFiles(convertedAudiosForPlaylistOutputPath))
+
+                       var selectedIds = selectedEntries.Select(entry => entry.ID).ToList();
+
+                        var filteredFiles = Directory.GetFiles(convertedAudiosForPlaylistOutputPath)
+                                                     .Where(file => selectedIds.Exists(id => file.Contains(id)))
+                                                     .ToList();
+
+                        foreach (var filePath in filteredFiles)
                         {
                             string fileName = Path.GetFileNameWithoutExtension(filePath);
                             string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
@@ -465,7 +478,7 @@ namespace VideoToText
                         index++;
                     }
 
-                    AppendLog($"Completed conversion of MP3 to text for file: '{fileName}'. \r\nOutput saved at: '{outputPath}'.");
+                    AppendLog($"\r\nCompleted conversion of MP3 to text for file: '{fileName}'. \r\nOutput saved at: '{outputPath}'.");
                 }
 
                 await model.DeleteFile(audioFile.Name);
