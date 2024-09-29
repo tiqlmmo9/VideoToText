@@ -2,6 +2,7 @@ using FFMpegCore;
 using Mscc.GenerativeAI;
 using System.Data;
 using System.Text;
+using System.Threading;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Metadata;
 
@@ -10,35 +11,26 @@ namespace VideoToText
     public partial class Form1 : Form
     {
         private CancellationTokenSource cancellationTokenSource;
-        //private const string FFMpegPath = "D:\\Testing Youtube Subtitle - FFmpeg\\ffmpeg-v5\\bin";
-        //private const string YTDLPath = "D:\\Testing Youtube Subtitle - FFmpeg\\ffmpeg-v5\\bin\\yt-dlp.exe";
 
         private static readonly string FFMpegPath = Path.Combine(Environment.CurrentDirectory, "bin");
         private static readonly string YTDLPath = Path.Combine(Environment.CurrentDirectory, "bin\\yt-dlp.exe");
-        //private const string YTDLPath = "D:\\Testing Youtube Subtitle - FFmpeg\\ffmpeg-v5\\bin\\yt-dlp.exe";
-
-        //private const string TemporaryFolder = "D:\\Testing Youtube Subtitle - FFmpeg\\ffmpeg-v5\\tmp";
-        //private const string initialPrompt = "Tôi là một Phật tử theo truyền thống Phật giáo Nguyên thủy Theravada đang ghi chép bài giảng của Sư. Hãy thực hiện các nhiệm vụ sau với file âm thanh đính kèm: " +
-        //                     "1. Chuyển đổi toàn bộ nội dung âm thanh thành văn bản. " +
-        //                     "2. Loại bỏ các từ không cần thiết thường xuất hiện trong văn nói như từ đệm, từ lặp, hoặc các cụm từ trong văn nói." +
-        //                     "3. Sắp xếp và định dạng lại nội dung thành các đoạn văn có cấu trúc rõ ràng, mạch lạc. " +
-        //                     "4. Đảm bảo kết quả cuối cùng dễ đọc và dễ hiểu nhất có thể, trong khi vẫn giữ nguyên ý nghĩa chính của nội dung gốc. " +
-        //                     "5. Nếu có bất kỳ thuật ngữ hoặc khái niệm nào liên quan đến Phật giáo Nguyên thủy Theravada, hãy chú ý giữ nguyên và sử dụng chính xác.";
-
-        //private const int MaxOutputTokens = 8192;
-
-
 
         private const int MaxOutputTokens = 8192;
 
         // Declare class-level variables for IGenerativeAI and model
         private IGenerativeAI generativeAI;
         private GenerativeModel model;
+        // Semaphore to limit the number of concurrent tasks
+        private SemaphoreSlim semaphore;
 
+        // Timer to respect RPM limits
+        private System.Threading.Timer rpmTimer;
+        private int rpmLimit;
+        private int rpmCounter;
 
         private void InitializeGenerativeAI()
         {
-            string geminiAiApiKey = apiKeyTextBox.Text.Trim(); // Get the API key from the text box
+            string geminiAiApiKey = apiKeyTextBox.Text.Trim();
 
             // Check if API key is valid
             if (string.IsNullOrEmpty(geminiAiApiKey))
@@ -47,10 +39,8 @@ namespace VideoToText
                 return;
             }
 
-            // Initialize the generative AI client with the provided API key
             generativeAI = new GoogleAI(geminiAiApiKey);
 
-            // Set up the generative model with the selected model name and configuration
             var modelConfig = new GenerationConfig
             {
                 MaxOutputTokens = MaxOutputTokens
@@ -61,6 +51,44 @@ namespace VideoToText
 
             // Set a timeout for the model operation
             model.Timeout = TimeSpan.FromMinutes(10);
+
+            var isPayAsYouGo = payAsYouGoCheckBox.Checked;
+
+            // Initialize the semaphore based on the selected model
+            if (modelComboBox.Text == Model.Gemini15Flash002)
+            {
+                if (isPayAsYouGo)
+                {
+                    semaphore = new SemaphoreSlim(2000, 2000); // 2,000 RPM for flash Pay-as-you-go
+                    rpmLimit = 2000;
+                }
+                else
+                {
+                    semaphore = new SemaphoreSlim(15, 15); // 15 RPM for flash free
+                    rpmLimit = 15;
+                }
+            }
+            else if (modelComboBox.Text == Model.Gemini15Pro002)
+            {
+                if (isPayAsYouGo)
+                {
+                    semaphore = new SemaphoreSlim(1000, 1000); // 1,000 RPM for pro Pay-as-you-go
+                    rpmLimit = 1000;
+                }
+                else
+                {
+                    semaphore = new SemaphoreSlim(2, 2); // 2 RPM for pro free
+                    rpmLimit = 2;
+                }
+            }
+
+            // Initialize RPM timer
+            rpmTimer = new System.Threading.Timer(ResetRpmCounter, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+        }
+
+        private void ResetRpmCounter(object state)
+        {
+            Interlocked.Exchange(ref rpmCounter, 0);
         }
 
         private async void btnConvertVideoToText_Click(object sender, EventArgs e)
@@ -75,11 +103,9 @@ namespace VideoToText
                 // Get the current directory
                 string currentDirectory = Environment.CurrentDirectory;
 
-                // Specify output paths for downloaded audio and converted MP3 files relative to the current directory
                 string downloadedAudiosPath = Path.Combine(currentDirectory, "downloaded_audios");
                 string convertedAudiosOutputPath = Path.Combine(currentDirectory, "converted_audios");
 
-                // Create the directories if they do not exist (this method does nothing if the directory already exists)
                 Directory.CreateDirectory(downloadedAudiosPath);
                 Directory.CreateDirectory(convertedAudiosOutputPath);
 
@@ -91,21 +117,14 @@ namespace VideoToText
                     return;
                 }
 
-                // Get the start and end index from the NumericUpDown controls
-                int startIndex = (int)numericUpDownStart.Value;
-                int endIndex = (int)numericUpDownEnd.Value;
+                int startIndex = (int)numericUpDownStart.Value - 1; // Adjust for 0-based index
+                int endIndex = (int)numericUpDownEnd.Value - 1; // Adjust for 0-based index
 
-                // Validate the indices
                 if (startIndex < 0 || endIndex < 0 || startIndex > endIndex)
                 {
                     MessageBox.Show("Please enter valid indices: Start should be less than or equal to End and both should be non-negative.");
                     return;
                 }
-
-                // Simulate processing a range of data (for example, from an array)
-                string[] data = { "Item1", "Item2", "Item3", "Item4", "Item5" };
-
-
 
                 string mp3ToTextOutputPath = outputPathTextBox.Text.Trim();
                 if (string.IsNullOrEmpty(mp3ToTextOutputPath))
@@ -187,10 +206,13 @@ namespace VideoToText
                         string playlistFolder = Path.Combine(downloadedAudiosPath, playlistData.Title);
                         Directory.CreateDirectory(playlistFolder);
 
-                        //var videoUrls = playlistData.Entries.Select(x => x.Url).ToArray();
+                        // example startIndex = 1, endIndex = 2 ==> ouput = 2
+                        var selectedEntries = playlistData.Entries
+                            .Skip(startIndex)
+                            .Take(endIndex - startIndex + 1)
+                            .ToArray();
 
-                        await ProcessVideos(playlistData.Entries.ToArray(), playlistFolder, urlCache, cancellationTokenSource.Token);
-
+                        await ProcessVideos(selectedEntries, playlistFolder, urlCache, cancellationTokenSource.Token);
 
                         string convertedAudiosForPlaylistOutputPath = Path.Combine(convertedAudiosOutputPath, playlistData.Title);
                         await ConvertToMp3(playlistFolder, convertedAudiosForPlaylistOutputPath);
@@ -245,13 +267,13 @@ namespace VideoToText
                         if (result == null)
                         {
                             string errorMessage = $"Failed to fetch data for URL: {url}";
-                            AppendLog(errorMessage); // Log the error
-                            throw new InvalidOperationException(errorMessage); // Throw an exception
+                            AppendLog(errorMessage);
+                            throw new InvalidOperationException(errorMessage);
                         }
                         else
                         {
                             AppendLog($"Successfully fetched data for URL: {url}");
-                            urlCache[url] = result; // Cache the result
+                            urlCache[url] = result;
                         }
                     }
                     else
@@ -262,9 +284,8 @@ namespace VideoToText
             }
             catch (Exception ex)
             {
-                // Log the error and rethrow it
                 AppendLog($"Error: {ex.Message}");
-                throw; // Rethrow the original exception
+                throw;
             }
         }
 
@@ -292,25 +313,6 @@ namespace VideoToText
                     //OutputFileTemplate = "%(title)s.%(ext)s"
                 };
 
-                //// Check the cache first
-                //if (!urlCache.TryGetValue(videoUrl, out VideoData video))
-                //{
-                //    // Fetch video data from YouTube
-                //    video = (await ytdl.RunVideoDataFetch(videoUrl))?.Data;
-
-                //    // Cache the fetched video data
-                //    if (video != null)
-                //    {
-                //        urlCache[videoUrl] = video; // Cache the result
-                //    }
-                //    else
-                //    {
-                //        AppendLog($"Failed to fetch data for URL: {videoUrl}");
-                //        return; // Early return if video data is not available
-                //    }
-                //}
-
-                // Check if the output MP3 file already exists, if not, then convert
                 if (Directory.GetFiles(outputDirectory).Any(x => x.Contains(video.ID)))
                 {
                     AppendLog($"{video.Title} already exists.");
@@ -336,27 +338,23 @@ namespace VideoToText
         {
             GlobalFFOptions.Configure(new FFOptions { BinaryFolder = FFMpegPath });
 
-            // Check if output folder exists, create if it doesn't
             if (!Directory.Exists(outputFolder))
             {
                 Directory.CreateDirectory(outputFolder);
             }
 
-            // Loop through each file in the subfolder and convert to MP3
             var tasks = new List<Task>();
             foreach (var file in Directory.GetFiles(inputFolder))
             {
                 string fileName = Path.GetFileNameWithoutExtension(file);
                 string outputFilePath = Path.Combine(outputFolder, $"{fileName}.mp3");
 
-                // Check if the output MP3 file already exists, if not, then convert
                 if (!File.Exists(outputFilePath))
                 {
                     tasks.Add(ConvertToMp3Async(file, outputFilePath));
                 }
             }
 
-            // Wait for all conversion tasks to complete
             await Task.WhenAll(tasks);
         }
 
@@ -407,6 +405,14 @@ namespace VideoToText
 
             try
             {
+                await semaphore.WaitAsync(cancellationToken); // Wait for the semaphore
+
+                // Respect RPM limit
+                while (Interlocked.Increment(ref rpmCounter) > rpmLimit)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                }
+
                 var uploadMediaResponse = await model.UploadFile(inputPath, cancellationToken: cancellationToken);
                 AppendLog($"Upload of file: '{fileName}' completed successfully.");
 
@@ -425,7 +431,7 @@ namespace VideoToText
                 int index = 1;
                 AppendLog($"Starting conversion of MP3 to text for file: '{fileName}'.");
 
-                using (var writer = new StreamWriter(outputPath, append: false, Encoding.UTF8))
+                using (var writer = new StreamWriter(outputPath, append: true, Encoding.UTF8))
                 {
                     while (true)
                     {
@@ -437,24 +443,21 @@ namespace VideoToText
                         {
                             if (response.Text == null)
                             {
-                                writer.Close(); // Close the writer before renaming the file
+                                writer.Close();
                                 throw new InvalidOperationException("Failed to retrieve valid response.");
                             }
 
-                            // Append log, build response, and track token count
                             AppendLogForAi(response.Text);
                             responseBuilder.Append(response.Text);
                             tokenCount += response?.UsageMetadata?.CandidatesTokenCount ?? 0;
 
-                            // Write the streaming output to the file
                             await writer.WriteAsync(response.Text);
-                            writer.Flush(); // Ensure data is written to the file immediately
+                            await writer.FlushAsync();
                         }
 
                         if (tokenCount < MaxOutputTokens)
                             break;
 
-                        // Continue processing if the output reached the token limit
                         request.AddContent(new Content(responseBuilder.ToString()) { Role = Role.Model });
                         index++;
 
@@ -490,6 +493,10 @@ namespace VideoToText
                 catch (Exception renameEx)
                 {
                     AppendLog($"Failed to rename output file after error: {renameEx.Message}");
+                }
+                finally
+                {
+                    semaphore.Release(); // Release the semaphore
                 }
             }
         }
@@ -534,6 +541,22 @@ namespace VideoToText
             {
                 numericUpDownStart.Enabled = false;
                 numericUpDownEnd.Enabled = false;
+            }
+        }
+
+        private void payAsYouGoCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (payAsYouGoCheckBox.Checked)
+            {
+                freeCheckBox.Checked = false;
+            }
+        }
+
+        private void freeCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (freeCheckBox.Checked)
+            {
+                payAsYouGoCheckBox.Checked = false;
             }
         }
     }

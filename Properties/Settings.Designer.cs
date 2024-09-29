@@ -123,5 +123,17 @@ namespace VideoToText.Properties {
                 this["SelectedModel"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool IsPayAsYouGo {
+            get {
+                return ((bool)(this["IsPayAsYouGo"]));
+            }
+            set {
+                this["IsPayAsYouGo"] = value;
+            }
+        }
     }
 }

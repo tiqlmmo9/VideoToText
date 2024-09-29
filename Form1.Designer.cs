@@ -55,6 +55,10 @@ namespace VideoToText
             // Restore ComboBox state
             modelComboBox.SelectedItem = Properties.Settings.Default.SelectedModel;
 
+            // Restore CheckBox state
+            payAsYouGoCheckBox.Checked = Properties.Settings.Default.IsPayAsYouGo;
+            freeCheckBox.Checked = !Properties.Settings.Default.IsPayAsYouGo;
+
             // Update visibility based on radio button state
             radioPlaylist_CheckedChanged(null, null);
         }
@@ -74,6 +78,8 @@ namespace VideoToText
             Properties.Settings.Default.Prompt = promptTextBox.Text;
             Properties.Settings.Default.IsPlaylistChecked = radioPlaylist.Checked;
             Properties.Settings.Default.SelectedModel = modelComboBox.SelectedItem.ToString();
+            // Save CheckBox state
+            Properties.Settings.Default.IsPayAsYouGo = payAsYouGoCheckBox.Checked;
 
             Properties.Settings.Default.Save();
         }
@@ -100,9 +106,11 @@ namespace VideoToText
             label3 = new Label();
             modelComboBox = new ComboBox();
             numericUpDownStart = new NumericUpDown();
-            label4 = new Label();
-            label5 = new Label();
+            startIndexLabel = new Label();
+            endIndexLabel = new Label();
             numericUpDownEnd = new NumericUpDown();
+            payAsYouGoCheckBox = new CheckBox();
+            freeCheckBox = new CheckBox();
             ((System.ComponentModel.ISupportInitialize)numericUpDownStart).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numericUpDownEnd).BeginInit();
             SuspendLayout();
@@ -111,7 +119,7 @@ namespace VideoToText
             // 
             btnConvertVideoToText.Location = new Point(12, 336);
             btnConvertVideoToText.Name = "btnConvertVideoToText";
-            btnConvertVideoToText.Size = new Size(416, 23);
+            btnConvertVideoToText.Size = new Size(444, 23);
             btnConvertVideoToText.TabIndex = 0;
             btnConvertVideoToText.Text = "CONVERT VIDEO TO TEXT";
             btnConvertVideoToText.UseVisualStyleBackColor = true;
@@ -153,10 +161,10 @@ namespace VideoToText
             // outputPathTextBox
             // 
             outputPathTextBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            outputPathTextBox.Location = new Point(12, 307);
+            outputPathTextBox.Location = new Point(14, 307);
             outputPathTextBox.Name = "outputPathTextBox";
             outputPathTextBox.PlaceholderText = "Please enter Output Path";
-            outputPathTextBox.Size = new Size(416, 23);
+            outputPathTextBox.Size = new Size(442, 23);
             outputPathTextBox.TabIndex = 3;
             // 
             // playlistIdLabel
@@ -241,7 +249,7 @@ namespace VideoToText
             // btnBrowse
             // 
             btnBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            btnBrowse.Location = new Point(462, 307);
+            btnBrowse.Location = new Point(462, 306);
             btnBrowse.Name = "btnBrowse";
             btnBrowse.Size = new Size(117, 23);
             btnBrowse.TabIndex = 10;
@@ -272,7 +280,7 @@ namespace VideoToText
             // label3
             // 
             label3.AutoSize = true;
-            label3.Location = new Point(285, 19);
+            label3.Location = new Point(285, 63);
             label3.Name = "label3";
             label3.Size = new Size(44, 15);
             label3.TabIndex = 16;
@@ -284,7 +292,7 @@ namespace VideoToText
             modelComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             modelComboBox.FormattingEnabled = true;
             modelComboBox.Items.AddRange(new object[] { "gemini-1.5-flash-002", "gemini-1.5-pro-002" });
-            modelComboBox.Location = new Point(341, 16);
+            modelComboBox.Location = new Point(341, 60);
             modelComboBox.Name = "modelComboBox";
             modelComboBox.Size = new Size(238, 23);
             modelComboBox.TabIndex = 15;
@@ -292,43 +300,77 @@ namespace VideoToText
             // numericUpDownStart
             // 
             numericUpDownStart.Location = new Point(14, 260);
+            numericUpDownStart.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
+            numericUpDownStart.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             numericUpDownStart.Name = "numericUpDownStart";
             numericUpDownStart.Size = new Size(62, 23);
             numericUpDownStart.TabIndex = 18;
+            numericUpDownStart.Value = new decimal(new int[] { 1, 0, 0, 0 });
             // 
-            // label4
+            // startIndexLabel
             // 
-            label4.AutoSize = true;
-            label4.Location = new Point(14, 242);
-            label4.Name = "label4";
-            label4.Size = new Size(66, 15);
-            label4.TabIndex = 19;
-            label4.Text = "Start Index:";
+            startIndexLabel.AutoSize = true;
+            startIndexLabel.Location = new Point(14, 242);
+            startIndexLabel.Name = "startIndexLabel";
+            startIndexLabel.Size = new Size(66, 15);
+            startIndexLabel.TabIndex = 19;
+            startIndexLabel.Text = "Start Index:";
             // 
-            // label5
+            // endIndexLabel
             // 
-            label5.AutoSize = true;
-            label5.Location = new Point(95, 242);
-            label5.Name = "label5";
-            label5.Size = new Size(62, 15);
-            label5.TabIndex = 21;
-            label5.Text = "End Index:";
+            endIndexLabel.AutoSize = true;
+            endIndexLabel.Location = new Point(95, 242);
+            endIndexLabel.Name = "endIndexLabel";
+            endIndexLabel.Size = new Size(62, 15);
+            endIndexLabel.TabIndex = 21;
+            endIndexLabel.Text = "End Index:";
             // 
             // numericUpDownEnd
             // 
             numericUpDownEnd.Location = new Point(95, 260);
+            numericUpDownEnd.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
+            numericUpDownEnd.Minimum = new decimal(new int[] { 2, 0, 0, 0 });
             numericUpDownEnd.Name = "numericUpDownEnd";
             numericUpDownEnd.Size = new Size(62, 23);
             numericUpDownEnd.TabIndex = 20;
+            numericUpDownEnd.Value = new decimal(new int[] { 2, 0, 0, 0 });
+            // 
+            // payAsYouGoCheckBox
+            // 
+            payAsYouGoCheckBox.AutoSize = true;
+            payAsYouGoCheckBox.Checked = true;
+            payAsYouGoCheckBox.CheckState = CheckState.Checked;
+            payAsYouGoCheckBox.Location = new Point(341, 20);
+            payAsYouGoCheckBox.Name = "payAsYouGoCheckBox";
+            payAsYouGoCheckBox.Size = new Size(105, 19);
+            payAsYouGoCheckBox.TabIndex = 22;
+            payAsYouGoCheckBox.Text = "Pay-as-you-go";
+            payAsYouGoCheckBox.UseVisualStyleBackColor = true;
+            payAsYouGoCheckBox.CheckedChanged += payAsYouGoCheckBox_CheckedChanged;
+            // 
+            // freeCheckBox
+            // 
+            freeCheckBox.AutoSize = true;
+            freeCheckBox.Checked = true;
+            freeCheckBox.CheckState = CheckState.Checked;
+            freeCheckBox.Location = new Point(285, 20);
+            freeCheckBox.Name = "freeCheckBox";
+            freeCheckBox.Size = new Size(48, 19);
+            freeCheckBox.TabIndex = 23;
+            freeCheckBox.Text = "Free";
+            freeCheckBox.UseVisualStyleBackColor = true;
+            freeCheckBox.CheckedChanged += freeCheckBox_CheckedChanged;
             // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(595, 552);
-            Controls.Add(label5);
+            Controls.Add(freeCheckBox);
+            Controls.Add(payAsYouGoCheckBox);
+            Controls.Add(endIndexLabel);
             Controls.Add(numericUpDownEnd);
-            Controls.Add(label4);
+            Controls.Add(startIndexLabel);
             Controls.Add(numericUpDownStart);
             Controls.Add(label3);
             Controls.Add(label2);
@@ -367,6 +409,11 @@ namespace VideoToText
                 playlistIdTextBox.Visible = true;
                 videoIdTextBox.Visible = false;
                 videoIdLabel.Visible = false;
+
+                startIndexLabel.Visible = true;
+                endIndexLabel.Visible = true;
+                numericUpDownStart.Visible = true;
+                numericUpDownEnd.Visible = true;
             }
         }
 
@@ -379,6 +426,11 @@ namespace VideoToText
                 playlistIdTextBox.Visible = false;
                 videoIdTextBox.Visible = true;
                 videoIdLabel.Visible = true;
+
+                startIndexLabel.Visible = false;
+                endIndexLabel.Visible = false;
+                numericUpDownStart.Visible = false;
+                numericUpDownEnd.Visible = false;
             }
         }
 
@@ -398,8 +450,10 @@ namespace VideoToText
         private Label label3;
         private ComboBox modelComboBox;
         private NumericUpDown numericUpDownStart;
-        private Label label4;
-        private Label label5;
+        private Label startIndexLabel;
+        private Label endIndexLabel;
         private NumericUpDown numericUpDownEnd;
+        private CheckBox payAsYouGoCheckBox;
+        private CheckBox freeCheckBox;
     }
 }
