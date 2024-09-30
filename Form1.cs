@@ -786,7 +786,10 @@ namespace VideoToText
             if (payAsYouGoCheckBox.Checked)
             {
                 freeCheckBox.Checked = false;
-                InitializeGenerativeAI();
+                if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
+                {
+                    InitializeGenerativeAI();
+                }
             }
         }
 
@@ -795,13 +798,19 @@ namespace VideoToText
             if (freeCheckBox.Checked)
             {
                 payAsYouGoCheckBox.Checked = false;
-                InitializeGenerativeAI();
+                if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
+                {
+                    InitializeGenerativeAI();
+                }
             }
         }
 
         private void modelComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            InitializeGenerativeAI();
+            if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
+            {
+                InitializeGenerativeAI();
+            }
         }
     }
 

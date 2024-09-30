@@ -34,9 +34,13 @@ namespace VideoToText
             InitializeComponent();
             LoadSettings();
 
-            InitializeGenerativeAI();
+            if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
+            {
+                InitializeGenerativeAI();
+                model.Timeout = TimeSpan.FromMinutes(10);
+            }
+
             // Set a timeout for the model operation
-            model.Timeout = TimeSpan.FromMinutes(10);
 
             this.FormClosing += Form1_FormClosing;
         }
