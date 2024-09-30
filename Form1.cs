@@ -433,7 +433,7 @@ namespace VideoToText
             catch (Exception ex)
             {
                 AppendLog($"Error: {ex.Message}");
-                throw;
+                throw ex;
             }
         }
 
