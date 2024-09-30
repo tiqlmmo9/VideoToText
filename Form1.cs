@@ -18,6 +18,7 @@ namespace VideoToText
         private static readonly string YTDLPath = Path.Combine(Environment.CurrentDirectory, "bin\\yt-dlp.exe");
 
         private const int MaxOutputTokens = 8192;
+        private const int BatchSize = 20;
 
         // Declare class-level variables for IGenerativeAI and model
         private IGenerativeAI generativeAI;
@@ -55,9 +56,6 @@ namespace VideoToText
 
             // Create the generative model
             model = generativeAI.GenerativeModel(modelComboBox.Text, modelConfig);
-
-            // Set a timeout for the model operation
-            model.Timeout = TimeSpan.FromMinutes(10);
 
             var isPayAsYouGo = payAsYouGoCheckBox.Checked;
 
@@ -405,30 +403,41 @@ namespace VideoToText
             AppendLog($"Validating YouTube URLs...");
             try
             {
-                foreach (var url in urls)
-                {
-                    AppendLog($"Validating YouTube URL: {url}");
+                var urlList = urls.ToList();
+                int totalBatches = (int)Math.Ceiling((double)urlList.Count / BatchSize);
 
-                    // Check the cache first
-                    if (!urlCache.TryGetValue(url, out var result))
+                for (int i = 0; i < totalBatches; i++)
+                {
+                    var currentBatch = urlList.Skip(i * BatchSize).Take(BatchSize);
+
+                    var tasks = currentBatch.Select(async url =>
                     {
-                        result = (await ytdl.RunVideoDataFetch(url))?.Data;
-                        if (result == null)
+                        AppendLog($"Validating YouTube URL: {url}");
+
+                        // Check the cache first
+                        if (!urlCache.TryGetValue(url, out var result))
                         {
-                            string errorMessage = $"Failed to fetch data for URL: {url}";
-                            AppendLog(errorMessage);
-                            throw new InvalidOperationException(errorMessage);
+                            result = (await ytdl.RunVideoDataFetch(url))?.Data;
+                            if (result == null)
+                            {
+                                string errorMessage = $"Failed to fetch data for URL: {url}";
+                                AppendLog(errorMessage);
+                                throw new InvalidOperationException(errorMessage);
+                            }
+                            else
+                            {
+                                AppendLog($"Successfully fetched data for URL: {url}");
+                                urlCache[url] = result;
+                            }
                         }
                         else
                         {
-                            AppendLog($"Successfully fetched data for URL: {url}");
-                            urlCache[url] = result;
+                            AppendLog($"Using cached data for URL: {url}");
                         }
-                    }
-                    else
-                    {
-                        AppendLog($"Using cached data for URL: {url}");
-                    }
+                    });
+
+                    // Await the completion of all tasks in the current batch
+                    await Task.WhenAll(tasks);
                 }
             }
             catch (Exception ex)
@@ -446,14 +455,13 @@ namespace VideoToText
 
         private async Task ProcessVideos(List<VideoData> videos, string outputDirectory, Dictionary<string, VideoData> urlCache, CancellationToken cancellationToken)
         {
-            int batchSize = 100; // Set your desired batch size
             var tasks = new List<Task>();
 
-            int numberOfBatches = (int)Math.Ceiling((double)videos.Count() / batchSize);
+            int numberOfBatches = (int)Math.Ceiling((double)videos.Count / BatchSize);
 
             for (int i = 0; i < numberOfBatches; i++)
             {
-                var currentBatch = videos.Skip(i * batchSize).Take(batchSize);
+                var currentBatch = videos.Skip(i * BatchSize).Take(BatchSize);
 
                 foreach (var video in currentBatch)
                 {
@@ -510,16 +518,15 @@ namespace VideoToText
                 Directory.CreateDirectory(outputFolder);
             }
 
-            int batchSize = 100; // Set your desired batch size
             var tasks = new List<Task>();
 
             //var files = Directory.GetFiles(inputFolder);
 
-            int numberOfBatches = (int)Math.Ceiling((double)files.Count / batchSize);
+            int numberOfBatches = (int)Math.Ceiling((double)files.Count / BatchSize);
 
             for (int i = 0; i < numberOfBatches; i++)
             {
-                var currentBatch = files.Skip(i * batchSize).Take(batchSize);
+                var currentBatch = files.Skip(i * BatchSize).Take(BatchSize);
 
                 foreach (var file in currentBatch)
                 {
