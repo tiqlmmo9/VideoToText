@@ -2,6 +2,7 @@ using FFMpegCore;
 using Google.Apis.YouTube.v3.Data;
 using Mscc.GenerativeAI;
 using System.Data;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using YoutubeDLSharp;
@@ -22,13 +23,17 @@ namespace VideoToText
         private IGenerativeAI generativeAI;
         private GenerativeModel model;
         // Semaphore to limit the number of concurrent tasks
-        private SemaphoreSlim semaphore;
+        //private SemaphoreSlim semaphore;
 
         // Timer to respect RPM limits
-        private System.Threading.Timer rpmTimer;
+        //private System.Threading.Timer rpmTimer;
         private int rpmLimit;
         private int rpmCounter;
-        private int timerIntervalMilliseconds = 60_000;
+
+        private int theoreticalRpmLimit;
+
+        //private int batchSize;
+        //private int timerIntervalMilliseconds = 60_000;
 
         private void InitializeGenerativeAI()
         {
@@ -65,8 +70,10 @@ namespace VideoToText
                 //semaphore = new SemaphoreSlim(15, 15); // 15 RPM for flash free
                 //rpmLimit = 15;
 
-                semaphore = new SemaphoreSlim(10, 10);
-                rpmLimit = 10;
+                //semaphore = new SemaphoreSlim(10, 10);
+                theoreticalRpmLimit = 15;
+
+                rpmLimit = 10; // The theoretical limit is 15 RPM, but a safer, more realistic value is 10 RPM
             }
             else if (modelComboBox.Text == Model.Gemini15Pro002)
             {
@@ -75,24 +82,28 @@ namespace VideoToText
                     //semaphore = new SemaphoreSlim(1000, 1000); // 1,000 RPM for pro Pay-as-you-go
                     //rpmLimit = 1000;
 
-                    semaphore = new SemaphoreSlim(10, 10);
-                    rpmLimit = 10;
+                    //semaphore = new SemaphoreSlim(10, 10);
+                    theoreticalRpmLimit = 1000;
+
+                    rpmLimit = 100;
                 }
                 else
                 {
-                    semaphore = new SemaphoreSlim(2, 2); // 2 RPM for pro free
-                    rpmLimit = 2;
+                    //semaphore = new SemaphoreSlim(2, 2); // 2 RPM for pro free
+                    theoreticalRpmLimit = 2;
+
+                    rpmLimit = 1; // The theoretical limit is 2 RPM, but a safer, more realistic value is 1 RPM
                 }
             }
 
             // Initialize RPM timer
-            rpmTimer = new System.Threading.Timer(ResetRpmCounter, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(timerIntervalMilliseconds));
+            //rpmTimer = new System.Threading.Timer(ResetRpmCounter, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
         }
 
-        private void ResetRpmCounter(object state)
-        {
-            Interlocked.Exchange(ref rpmCounter, 0);
-        }
+        //private void ResetRpmCounter(object state)
+        //{
+        //    Interlocked.Exchange(ref rpmCounter, 0);
+        //}
 
         private async void btnConvertVideoToText_Click(object sender, EventArgs e)
         {
@@ -228,28 +239,63 @@ namespace VideoToText
                         AppendLog("CONVERT TO MP3 COMPLETE!!!");
 
                         // ----------- CONVERT MP3 TO TEXT -----------
-
+                        // using Batch Size
                         var tasks = new List<Task>();
 
-                       var selectedIds = selectedEntries.Select(entry => entry.ID).ToList();
+                        var selectedIds = selectedEntries.Select(entry => entry.ID).ToList();
 
                         var filteredFiles = Directory.GetFiles(convertedAudiosForPlaylistOutputPath)
                                                      .Where(file => selectedIds.Exists(id => file.Contains(id)))
                                                      .ToList();
 
-                        foreach (var filePath in filteredFiles)
-                        {
-                            string fileName = Path.GetFileNameWithoutExtension(filePath);
-                            string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
+                        int numberOfBatches = (int)Math.Ceiling((double)filteredFiles.Count / rpmLimit);
 
-                            // Check if the output MP3 file already exists, if not, then convert
-                            if (!File.Exists(outputFilePath))
+                        for (int i = 0; i < numberOfBatches; i++)
+                        {
+                            var stopwatch = new Stopwatch(); // Start tracking time
+                            stopwatch.Start();
+
+                            var currentFilesBatch = filteredFiles.Skip(i * rpmLimit).Take(rpmLimit);
+
+                            foreach (var filePath in currentFilesBatch)
                             {
-                                tasks.Add(ConvertMp3ToText(model, filePath, outputFilePath, cancellationTokenSource.Token));
+                                string fileName = Path.GetFileNameWithoutExtension(filePath);
+                                string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
+
+                                // Check if the output MP3 file already exists, if not, then convert
+                                if (!File.Exists(outputFilePath))
+                                {
+                                    tasks.Add(ConvertMp3ToText(model, filePath, outputFilePath, cancellationTokenSource.Token));
+                                }
                             }
+
+                            // Execute the current batch of tasks before moving on to the next batch
+                            await Task.WhenAll(tasks);
+
+                            stopwatch.Stop(); // End tracking time
+
+                            // If the batch took less than 1 minute, wait until the 1 minute mark
+                            var timeElapsed = stopwatch.ElapsedMilliseconds;
+                            var oneMinuteInMilliseconds = 60 * 1000;
+                            if (tasks.Count == rpmLimit && timeElapsed < oneMinuteInMilliseconds)
+                            {
+                                var delayTime = oneMinuteInMilliseconds - (int)timeElapsed;
+
+                                // Convert delayTime to seconds, rounding up to ensure we wait enough
+                                int delayTimeInSeconds = (int)Math.Ceiling(delayTime / 1000.0);
+
+                                // Log the waiting time in 1-second intervals
+                                for (int i1 = 0; i1 < delayTimeInSeconds; i1++)
+                                {
+                                    AppendLog($"Pausing for {delayTimeInSeconds - i1} seconds due to reaching the {theoreticalRpmLimit} RPM (requests per minute) limit...");
+
+                                    await Task.Delay(1000, cancellationTokenSource.Token);
+                                }
+                            }
+
+                            tasks.Clear(); // Clear the task list for the next batch
                         }
 
-                        await Task.WhenAll(tasks);
 
 
                         AppendLog("\r\nCONVERT MP3 TO TEXT COMPLETE!!!");
@@ -420,7 +466,7 @@ namespace VideoToText
 
             try
             {
-                await semaphore.WaitAsync(cancellationToken); // Wait for the semaphore
+                //await semaphore.WaitAsync(cancellationToken); // Wait for the semaphore
 
                 var uploadMediaResponse = await model.UploadFile(inputPath, cancellationToken: cancellationToken);
                 AppendLog($"Upload of file: '{fileName}' completed successfully.");
@@ -438,19 +484,25 @@ namespace VideoToText
                 request.AddMedia(audioFile); // Add the media file to the request initially
 
                 int index = 1;
+                //int requestTotal = 0;
                 AppendLog($"Starting conversion of MP3 to text for file: '{fileName}'.");
 
                 using (var writer = new StreamWriter(outputPath, append: false, Encoding.UTF8))
                 {
                     while (true)
                     {
-                        // Respect RPM limit
-                        while (Interlocked.Increment(ref rpmCounter) > rpmLimit)
-                        {
-                            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                        }
+                        //// Respect RPM limit
+                        //while (Interlocked.Increment(ref rpmCounter) > rpmLimit)
+                        //{
+                        //    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                        //}
+                        //Interlocked.Increment(ref rpmCounter);
+
+                        var stopwatch = new Stopwatch(); // Start tracking time
+                        stopwatch.Start();
 
                         var responseStream = model.GenerateContentStream(request, cancellationToken: cancellationToken);
+                        Interlocked.Increment(ref rpmCounter);
 
                         StringBuilder responseBuilder = new();
                         int tokenCount = 0;
@@ -474,11 +526,40 @@ namespace VideoToText
                         if (tokenCount < MaxOutputTokens)
                             break;
 
+                        stopwatch.Stop(); // End tracking time
+
+                        // If the batch took less than 1 minute, wait until the 1 minute mark
+                        var timeElapsed = stopwatch.ElapsedMilliseconds;
+                        var oneMinuteInMilliseconds = 60 * 1000;
+                        if (rpmCounter == rpmLimit && timeElapsed < oneMinuteInMilliseconds)
+                        {
+                            //var delayTime = oneMinuteInMilliseconds - (int)timeElapsed;
+                            //await Task.Delay(delayTime, cancellationToken);
+                            var delayTime = oneMinuteInMilliseconds - (int)timeElapsed;
+
+                            // Convert delayTime to seconds, rounding up to ensure we wait enough
+                            int delayTimeInSeconds = (int)Math.Ceiling(delayTime / 1000.0);
+
+                            // Log the waiting time in 1-second intervals
+                            for (int i1 = 0; i1 < delayTimeInSeconds; i1++)
+                            {
+                                AppendLog($"Pausing for {delayTimeInSeconds - i1} seconds due to reaching the {theoreticalRpmLimit} RPM (requests per minute) limit...");
+
+                                await Task.Delay(1000, cancellationTokenSource.Token);
+                            }
+
+                            // reset request total
+                            Interlocked.Exchange(ref rpmCounter, 0);
+                        }
+
                         request.AddContent(new Content(responseBuilder.ToString()) { Role = Role.Model });
                         index++;
 
                         request.AddContent(new Content("Viết tiếp tục đến hết phần còn lại") { Role = Role.User });
                         index++;
+
+                        Interlocked.Increment(ref rpmCounter);
+                        //requestTotal++;
                     }
 
                     AppendLog($"\r\nCompleted conversion of MP3 to text for file: '{fileName}'. \r\nOutput saved at: '{outputPath}'.");
@@ -510,11 +591,11 @@ namespace VideoToText
                 {
                     AppendLog($"\r\nFailed to rename output file after error: {renameEx.Message}");
                 }
-                finally
-                {
-                    await Task.Delay(timerIntervalMilliseconds);
-                    semaphore.Release(); // Release the semaphore
-                }
+                //finally
+                //{
+                //    //await Task.Delay(timerIntervalMilliseconds);
+                //    semaphore.Release(); // Release the semaphore
+                //}
             }
         }
 
