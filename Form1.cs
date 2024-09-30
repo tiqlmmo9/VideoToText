@@ -183,12 +183,12 @@ namespace VideoToText
                         .Select(x => x.ID)
                         .ToList();
 
-                    var filteredFiles = Directory.GetFiles(convertedAudiosOutputPath)
+                    var filteredDownloadedFiles = Directory.GetFiles(downloadedAudiosPath)
                                                  .Where(file => selectedIds.Exists(id => file.Contains(id)))
                                                  .ToList();
 
                     //await ConvertToMp3(downloadedAudiosPath, convertedAudiosOutputPath);
-                    await ConvertToMp3(filteredFiles, convertedAudiosOutputPath);
+                    await ConvertToMp3(filteredDownloadedFiles, convertedAudiosOutputPath);
 
                     AppendLog("CONVERT TO MP3 COMPLETE!!!");
 
@@ -216,14 +216,18 @@ namespace VideoToText
 
                     //await Task.WhenAll(tasks);
 
-                    int numberOfBatches = (int)Math.Ceiling((double)filteredFiles.Count / rpmLimit);
+                    var filteredMp3Files = Directory.GetFiles(convertedAudiosOutputPath)
+                            .Where(file => selectedIds.Exists(id => file.Contains(id)))
+                             .ToList();
+
+                    int numberOfBatches = (int)Math.Ceiling((double)filteredMp3Files.Count / rpmLimit);
 
                     for (int i = 0; i < numberOfBatches; i++)
                     {
                         var stopwatch = new Stopwatch(); // Start tracking time
                         stopwatch.Start();
 
-                        var currentFilesBatch = filteredFiles.Skip(i * rpmLimit).Take(rpmLimit);
+                        var currentFilesBatch = filteredMp3Files.Skip(i * rpmLimit).Take(rpmLimit);
 
                         foreach (var filePath in currentFilesBatch)
                         {
@@ -309,32 +313,41 @@ namespace VideoToText
                         // ----------- CONVERT AUDIO TO MP3 -----------
 
                         string convertedAudiosForPlaylistOutputPath = Path.Combine(convertedAudiosOutputPath, playlistData.Title);
+                        Directory.CreateDirectory(convertedAudiosForPlaylistOutputPath);
 
-                        var filteredFiles = Directory.GetFiles(convertedAudiosForPlaylistOutputPath)
+                        var filteredDownloadedFiles = Directory.GetFiles(playlistFolder)
                              .Where(file => selectedIds.Exists(id => file.Contains(id)))
                              .ToList();
 
-                        await ConvertToMp3(filteredFiles, convertedAudiosForPlaylistOutputPath);
+                        await ConvertToMp3(filteredDownloadedFiles, convertedAudiosForPlaylistOutputPath);
 
                         AppendLog("CONVERT TO MP3 COMPLETE!!!");
 
                         // ----------- CONVERT MP3 TO TEXT -----------
+
+                        string playlistMp3ToTextOutputPath = Path.Combine(mp3ToTextOutputPath, playlistData.Title);
+                        Directory.CreateDirectory(playlistMp3ToTextOutputPath);
+
+                        var filteredMp3Files = Directory.GetFiles(convertedAudiosForPlaylistOutputPath)
+                             .Where(file => selectedIds.Exists(id => file.Contains(id)))
+                             .ToList();
+
                         // using Batch Size
                         var tasks = new List<Task>();
 
-                        int numberOfBatches = (int)Math.Ceiling((double)filteredFiles.Count / rpmLimit);
+                        int numberOfBatches = (int)Math.Ceiling((double)filteredMp3Files.Count / rpmLimit);
 
                         for (int i = 0; i < numberOfBatches; i++)
                         {
                             var stopwatch = new Stopwatch(); // Start tracking time
                             stopwatch.Start();
 
-                            var currentFilesBatch = filteredFiles.Skip(i * rpmLimit).Take(rpmLimit);
+                            var currentFilesBatch = filteredMp3Files.Skip(i * rpmLimit).Take(rpmLimit);
 
                             foreach (var filePath in currentFilesBatch)
                             {
                                 string fileName = Path.GetFileNameWithoutExtension(filePath);
-                                string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
+                                string outputFilePath = Path.Combine(playlistMp3ToTextOutputPath, $"{fileName}.txt");
 
                                 // Check if the output MP3 file already exists, if not, then convert
                                 if (!File.Exists(outputFilePath))
@@ -432,7 +445,7 @@ namespace VideoToText
 
         private async Task ProcessVideos(List<VideoData> videos, string outputDirectory, Dictionary<string, VideoData> urlCache, CancellationToken cancellationToken)
         {
-            int batchSize = 10; // Set your desired batch size
+            int batchSize = 100; // Set your desired batch size
             var tasks = new List<Task>();
 
             int numberOfBatches = (int)Math.Ceiling((double)videos.Count() / batchSize);
@@ -474,7 +487,7 @@ namespace VideoToText
 
                 AppendLog($"Downloading: {video.Title}");
 
-                var progressHandler = new Progress<DownloadProgress>(p => AppendLog($"{video.Title}: {p.Progress * 100:F2}%"));
+                var progressHandler = new Progress<DownloadProgress>(p => AppendLog($"Downloading: {video.Title}: {p.Progress * 100:F2}%"));
 
                 var result = await ytdl.RunAudioDownload($"https://www.youtube.com/watch?v={video.ID}", ct: cancellationToken, progress: progressHandler);
 
@@ -496,7 +509,7 @@ namespace VideoToText
                 Directory.CreateDirectory(outputFolder);
             }
 
-            int batchSize = 10; // Set your desired batch size
+            int batchSize = 100; // Set your desired batch size
             var tasks = new List<Task>();
 
             //var files = Directory.GetFiles(inputFolder);
@@ -538,7 +551,7 @@ namespace VideoToText
                 {
                     if (percentage < 100)
                     {
-                        AppendLog($"Converted to MP3 -- {Path.GetFileName(inputFilePath)}: {percentage}%");
+                        AppendLog($"Converting to MP3 -- {Path.GetFileName(inputFilePath)}: {percentage}%");
                     }
                 }
 
@@ -748,6 +761,15 @@ namespace VideoToText
             {
                 numericUpDownStart.Enabled = false;
                 numericUpDownEnd.Enabled = false;
+                numericUpDownStart.Value = 1;
+                numericUpDownEnd.Value = 9999;
+            }
+            else
+            {
+                numericUpDownStart.Enabled = true;
+                numericUpDownEnd.Enabled = true;
+                numericUpDownStart.Value = 1;
+                numericUpDownEnd.Value = 2;
             }
         }
 
