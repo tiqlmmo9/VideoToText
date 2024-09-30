@@ -178,23 +178,82 @@ namespace VideoToText
 
                     var tasks = new List<Task>();
 
+
+                    //var filteredFiles = Directory.GetFiles(convertedAudiosOutputPath)
+                    //                             .Where(file => urls.ToList().Exists(url => file.Contains(url)))
+                    //                             .ToList();
+
+
+                    var selectedIds = urlCache.Where(x => urls.Contains(x.Key))
+                        .Select(x => x.Value)
+                        .Select(x => x.ID)
+                        .ToList();
+
                     var filteredFiles = Directory.GetFiles(convertedAudiosOutputPath)
-                                                 .Where(file => urls.ToList().Exists(url => file.Contains(url)))
+                                                 .Where(file => selectedIds.Exists(id => file.Contains(id)))
                                                  .ToList();
 
-                    foreach (var filePath in filteredFiles)
+                    //foreach (var filePath in filteredFiles)
+                    //{
+                    //    string fileName = Path.GetFileNameWithoutExtension(filePath);
+                    //    string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
+
+                    //    // Check if the output MP3 file already exists, if not, then convert
+                    //    if (!File.Exists(outputFilePath))
+                    //    {
+                    //        tasks.Add(ConvertMp3ToText(model, filePath, outputFilePath, cancellationTokenSource.Token));
+                    //    }
+                    //}
+
+                    //await Task.WhenAll(tasks);
+
+                    int numberOfBatches = (int)Math.Ceiling((double)filteredFiles.Count / rpmLimit);
+
+                    for (int i = 0; i < numberOfBatches; i++)
                     {
-                        string fileName = Path.GetFileNameWithoutExtension(filePath);
-                        string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
+                        var stopwatch = new Stopwatch(); // Start tracking time
+                        stopwatch.Start();
 
-                        // Check if the output MP3 file already exists, if not, then convert
-                        if (!File.Exists(outputFilePath))
+                        var currentFilesBatch = filteredFiles.Skip(i * rpmLimit).Take(rpmLimit);
+
+                        foreach (var filePath in currentFilesBatch)
                         {
-                            tasks.Add(ConvertMp3ToText(model, filePath, outputFilePath, cancellationTokenSource.Token));
-                        }
-                    }
+                            string fileName = Path.GetFileNameWithoutExtension(filePath);
+                            string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
 
-                    await Task.WhenAll(tasks);
+                            // Check if the output MP3 file already exists, if not, then convert
+                            if (!File.Exists(outputFilePath))
+                            {
+                                tasks.Add(ConvertMp3ToText(model, filePath, outputFilePath, cancellationTokenSource.Token));
+                            }
+                        }
+
+                        // Execute the current batch of tasks before moving on to the next batch
+                        await Task.WhenAll(tasks);
+
+                        stopwatch.Stop(); // End tracking time
+
+                        // If the batch took less than 1 minute, wait until the 1 minute mark
+                        var timeElapsed = stopwatch.ElapsedMilliseconds;
+                        var oneMinuteInMilliseconds = 60 * 1000;
+                        if (tasks.Count == rpmLimit && timeElapsed < oneMinuteInMilliseconds)
+                        {
+                            var delayTime = oneMinuteInMilliseconds - (int)timeElapsed;
+
+                            // Convert delayTime to seconds, rounding up to ensure we wait enough
+                            int delayTimeInSeconds = (int)Math.Ceiling(delayTime / 1000.0);
+
+                            // Log the waiting time in 1-second intervals
+                            for (int i1 = 0; i1 < delayTimeInSeconds; i1++)
+                            {
+                                AppendLog($"Pausing for {delayTimeInSeconds - i1} seconds due to reaching the {theoreticalRpmLimit} RPM (requests per minute) limit...");
+
+                                await Task.Delay(1000, cancellationTokenSource.Token);
+                            }
+                        }
+
+                        tasks.Clear(); // Clear the task list for the next batch
+                    }
 
 
                     AppendLog("\r\nCONVERT MP3 TO TEXT COMPLETE!!!");
@@ -384,7 +443,7 @@ namespace VideoToText
 
                 var progressHandler = new Progress<DownloadProgress>(p => AppendLog($"{video.Title}: {p.Progress * 100:F2}%"));
 
-                var result = await ytdl.RunAudioDownload(video.Url, ct: cancellationToken, progress: progressHandler);
+                var result = await ytdl.RunAudioDownload($"https://www.youtube.com/watch?v={video.ID}", ct: cancellationToken, progress: progressHandler);
 
                 AppendLog(result.Success ? $"Downloaded: {video.Title}" : $"Failed to download: {video.Title}");
             }
