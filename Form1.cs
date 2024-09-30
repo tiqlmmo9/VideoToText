@@ -112,8 +112,6 @@ namespace VideoToText
             {
                 cancellationTokenSource = new CancellationTokenSource();
 
-                string youtubeApiKey = "AIzaSyA4HGKpLTz76bL-xaXKCzbu9DGI1YtSJVA";
-
                 // Get the current directory
                 string currentDirectory = Environment.CurrentDirectory;
 
@@ -168,9 +166,29 @@ namespace VideoToText
                 {
                     await ValidateUrls(ytdl, urls, urlCache);
 
-                    await ProcessVideos(urlCache.Values.ToArray(), downloadedAudiosPath, urlCache, cancellationTokenSource.Token);
+                    // ----------- DOWNLOAD AUDIO -----------
 
-                    await ConvertToMp3(downloadedAudiosPath, convertedAudiosOutputPath);
+                    var selectedVideos = urlCache
+                        .Where(x => urls.Contains(x.Key))
+                        .Select(x => x.Value)
+                        .ToList();
+
+                    await ProcessVideos(selectedVideos, downloadedAudiosPath, urlCache, cancellationTokenSource.Token);
+
+                    // ----------- CONVERT AUDIO TO MP3 -----------
+
+
+                    var selectedIds = urlCache.Where(x => urls.Contains(x.Key))
+                        .Select(x => x.Value)
+                        .Select(x => x.ID)
+                        .ToList();
+
+                    var filteredFiles = Directory.GetFiles(convertedAudiosOutputPath)
+                                                 .Where(file => selectedIds.Exists(id => file.Contains(id)))
+                                                 .ToList();
+
+                    //await ConvertToMp3(downloadedAudiosPath, convertedAudiosOutputPath);
+                    await ConvertToMp3(filteredFiles, convertedAudiosOutputPath);
 
                     AppendLog("CONVERT TO MP3 COMPLETE!!!");
 
@@ -183,15 +201,6 @@ namespace VideoToText
                     //                             .Where(file => urls.ToList().Exists(url => file.Contains(url)))
                     //                             .ToList();
 
-
-                    var selectedIds = urlCache.Where(x => urls.Contains(x.Key))
-                        .Select(x => x.Value)
-                        .Select(x => x.ID)
-                        .ToList();
-
-                    var filteredFiles = Directory.GetFiles(convertedAudiosOutputPath)
-                                                 .Where(file => selectedIds.Exists(id => file.Contains(id)))
-                                                 .ToList();
 
                     //foreach (var filePath in filteredFiles)
                     //{
@@ -281,31 +290,37 @@ namespace VideoToText
                             }
                         }
 
+                        // ----------- DOWNLOAD AUDIO -----------
+
                         string playlistFolder = Path.Combine(downloadedAudiosPath, playlistData.Title);
                         Directory.CreateDirectory(playlistFolder);
 
                         // example startIndex = 1, endIndex = 2 ==> ouput = 2
-                        var selectedEntries = playlistData.Entries
+                        var selectedVideos = playlistData.Entries
                             .Skip(startIndex)
                             .Take(endIndex - startIndex + 1)
-                            .ToArray();
+                            .ToList();
 
-                        await ProcessVideos(selectedEntries, playlistFolder, urlCache, cancellationTokenSource.Token);
+                        var selectedIds = selectedVideos.Select(entry => entry.ID).ToList();
+
+
+                        await ProcessVideos(selectedVideos, playlistFolder, urlCache, cancellationTokenSource.Token);
+
+                        // ----------- CONVERT AUDIO TO MP3 -----------
 
                         string convertedAudiosForPlaylistOutputPath = Path.Combine(convertedAudiosOutputPath, playlistData.Title);
-                        await ConvertToMp3(playlistFolder, convertedAudiosForPlaylistOutputPath);
+
+                        var filteredFiles = Directory.GetFiles(convertedAudiosForPlaylistOutputPath)
+                             .Where(file => selectedIds.Exists(id => file.Contains(id)))
+                             .ToList();
+
+                        await ConvertToMp3(filteredFiles, convertedAudiosForPlaylistOutputPath);
 
                         AppendLog("CONVERT TO MP3 COMPLETE!!!");
 
                         // ----------- CONVERT MP3 TO TEXT -----------
                         // using Batch Size
                         var tasks = new List<Task>();
-
-                        var selectedIds = selectedEntries.Select(entry => entry.ID).ToList();
-
-                        var filteredFiles = Directory.GetFiles(convertedAudiosForPlaylistOutputPath)
-                                                     .Where(file => selectedIds.Exists(id => file.Contains(id)))
-                                                     .ToList();
 
                         int numberOfBatches = (int)Math.Ceiling((double)filteredFiles.Count / rpmLimit);
 
@@ -415,10 +430,28 @@ namespace VideoToText
             AppendLog("\r\nCANCELLED!!!");
         }
 
-        private async Task ProcessVideos(VideoData[] videos, string outputDirectory, Dictionary<string, VideoData> urlCache, CancellationToken cancellationToken)
+        private async Task ProcessVideos(List<VideoData> videos, string outputDirectory, Dictionary<string, VideoData> urlCache, CancellationToken cancellationToken)
         {
-            var tasks = videos.Select((video) => ProcessSingleVideo(video, outputDirectory, urlCache, cancellationToken));
-            await Task.WhenAll(tasks);
+            int batchSize = 10; // Set your desired batch size
+            var tasks = new List<Task>();
+
+            int numberOfBatches = (int)Math.Ceiling((double)videos.Count() / batchSize);
+
+            for (int i = 0; i < numberOfBatches; i++)
+            {
+                var currentBatch = videos.Skip(i * batchSize).Take(batchSize);
+
+                foreach (var video in currentBatch)
+                {
+                    tasks.Add(ProcessSingleVideo(video, outputDirectory, urlCache, cancellationToken));
+                }
+
+                // Wait for all tasks in the current batch to complete before moving on to the next batch
+                await Task.WhenAll(tasks);
+
+                tasks.Clear(); // Clear the task list for the next batch
+            }
+
         }
 
         private async Task ProcessSingleVideo(VideoData video, string outputDirectory, Dictionary<string, VideoData> urlCache, CancellationToken cancellationToken)
@@ -454,7 +487,7 @@ namespace VideoToText
         }
 
 
-        private async Task ConvertToMp3(string inputFolder, string outputFolder)
+        private async Task ConvertToMp3(List<string> files, string outputFolder)
         {
             GlobalFFOptions.Configure(new FFOptions { BinaryFolder = FFMpegPath });
 
@@ -463,17 +496,34 @@ namespace VideoToText
                 Directory.CreateDirectory(outputFolder);
             }
 
+            int batchSize = 10; // Set your desired batch size
             var tasks = new List<Task>();
-            foreach (var file in Directory.GetFiles(inputFolder))
-            {
-                string fileName = Path.GetFileNameWithoutExtension(file);
-                string outputFilePath = Path.Combine(outputFolder, $"{fileName}.mp3");
 
-                if (!File.Exists(outputFilePath))
+            //var files = Directory.GetFiles(inputFolder);
+
+            int numberOfBatches = (int)Math.Ceiling((double)files.Count / batchSize);
+
+            for (int i = 0; i < numberOfBatches; i++)
+            {
+                var currentBatch = files.Skip(i * batchSize).Take(batchSize);
+
+                foreach (var file in currentBatch)
                 {
-                    tasks.Add(ConvertToMp3Async(file, outputFilePath));
+                    string fileName = Path.GetFileNameWithoutExtension(file);
+                    string outputFilePath = Path.Combine(outputFolder, $"{fileName}.mp3");
+
+                    if (!File.Exists(outputFilePath))
+                    {
+                        tasks.Add(ConvertToMp3Async(file, outputFilePath));
+                    }
                 }
+
+                // Execute the current batch of tasks before moving on to the next batch
+                await Task.WhenAll(tasks);
+
+                tasks.Clear(); // Clear the task list for the next batch
             }
+
 
             await Task.WhenAll(tasks);
         }
