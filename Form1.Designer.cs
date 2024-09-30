@@ -304,6 +304,7 @@ namespace VideoToText
             modelComboBox.Name = "modelComboBox";
             modelComboBox.Size = new Size(238, 23);
             modelComboBox.TabIndex = 15;
+            modelComboBox.SelectedIndexChanged += modelComboBox_SelectedIndexChanged;
             // 
             // numericUpDownStart
             // 

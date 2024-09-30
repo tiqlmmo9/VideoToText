@@ -276,8 +276,8 @@ namespace VideoToText
                 {
                     await ValidateUrls(ytdl, urls, urlCache);
 
-                    if (urls.Length == 1 && (startIndex >= urlCache.Values.ToList()[0].Entries.Length
-                        || endIndex >= urlCache.Values.ToList()[0].Entries.Length))
+                    if (urls.Length == 1 && (startIndex >= urlCache.Values.ToList()[0].Entries.Length))
+                    //|| endIndex >= urlCache.Values.ToList()[0].Entries.Length)
                     {
                         MessageBox.Show("Start or End index exceeds the number of items.");
                         return;
@@ -769,7 +769,7 @@ namespace VideoToText
                 numericUpDownStart.Enabled = true;
                 numericUpDownEnd.Enabled = true;
                 numericUpDownStart.Value = 1;
-                numericUpDownEnd.Value = 2;
+                numericUpDownEnd.Value = 9999;
             }
         }
 
@@ -778,6 +778,7 @@ namespace VideoToText
             if (payAsYouGoCheckBox.Checked)
             {
                 freeCheckBox.Checked = false;
+                InitializeGenerativeAI();
             }
         }
 
@@ -786,7 +787,13 @@ namespace VideoToText
             if (freeCheckBox.Checked)
             {
                 payAsYouGoCheckBox.Checked = false;
+                InitializeGenerativeAI();
             }
+        }
+
+        private void modelComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            InitializeGenerativeAI();
         }
     }
 
