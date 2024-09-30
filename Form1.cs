@@ -294,6 +294,7 @@ namespace VideoToText
                             }
                         }
 
+                        playlistData.Title = PathHelper.RemoveInvalidPathChars(playlistData.Title);
                         // ----------- DOWNLOAD AUDIO -----------
 
                         string playlistFolder = Path.Combine(downloadedAudiosPath, playlistData.Title);
