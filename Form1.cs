@@ -1,12 +1,16 @@
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 using FFMpegCore;
-using Google.Apis.YouTube.v3.Data;
 using Mscc.GenerativeAI;
 using System.Data;
 using System.Diagnostics;
 using System.Text;
-using System.Threading;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Metadata;
+using Body = DocumentFormat.OpenXml.Wordprocessing.Body;
+using Color = DocumentFormat.OpenXml.Wordprocessing.Color;
+using Path = System.IO.Path;
 
 namespace VideoToText
 {
@@ -56,6 +60,19 @@ namespace VideoToText
 
             // Create the generative model
             model = generativeAI.GenerativeModel(modelComboBox.Text, modelConfig);
+        }
+
+        //private void ResetRpmCounter(object state)
+        //{
+        //    Interlocked.Exchange(ref rpmCounter, 0);
+        //}
+
+        private async void btnConvertVideoToText_Click(object sender, EventArgs e)
+        {
+            if (model == null)
+            {
+                InitializeGenerativeAI();
+            }
 
             var isPayAsYouGo = payAsYouGoCheckBox.Checked;
 
@@ -90,21 +107,13 @@ namespace VideoToText
                     //semaphore = new SemaphoreSlim(2, 2); // 2 RPM for pro free
                     theoreticalRpmLimit = 2;
 
-                    rpmLimit = 1; // The theoretical limit is 2 RPM, but a safer, more realistic value is 1 RPM
+                    rpmLimit = 2; // The theoretical limit is 2 RPM, but a safer, more realistic value is 1 RPM
                 }
             }
 
             // Initialize RPM timer
             //rpmTimer = new System.Threading.Timer(ResetRpmCounter, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
-        }
 
-        //private void ResetRpmCounter(object state)
-        //{
-        //    Interlocked.Exchange(ref rpmCounter, 0);
-        //}
-
-        private async void btnConvertVideoToText_Click(object sender, EventArgs e)
-        {
             btnConvertVideoToText.Enabled = false;
             try
             {
@@ -230,7 +239,7 @@ namespace VideoToText
                         foreach (var filePath in currentFilesBatch)
                         {
                             string fileName = Path.GetFileNameWithoutExtension(filePath);
-                            string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.txt");
+                            string outputFilePath = Path.Combine(mp3ToTextOutputPath, $"{fileName}.docx");
 
                             // Check if the output MP3 file already exists, if not, then convert
                             if (!File.Exists(outputFilePath))
@@ -292,7 +301,7 @@ namespace VideoToText
                             }
                         }
 
-                        playlistData.Title = PathHelper.RemoveInvalidPathChars(playlistData.Title);
+                        playlistData.Title = Extensions.RemoveInvalidPathChars(playlistData.Title);
                         // ----------- DOWNLOAD AUDIO -----------
 
                         string playlistFolder = Path.Combine(downloadedAudiosPath, playlistData.Title);
@@ -346,7 +355,7 @@ namespace VideoToText
                             foreach (var filePath in currentFilesBatch)
                             {
                                 string fileName = Path.GetFileNameWithoutExtension(filePath);
-                                string outputFilePath = Path.Combine(playlistMp3ToTextOutputPath, $"{fileName}.txt");
+                                string outputFilePath = Path.Combine(playlistMp3ToTextOutputPath, $"{fileName}.docx");
 
                                 // Check if the output MP3 file already exists, if not, then convert
                                 if (!File.Exists(outputFilePath))
@@ -617,17 +626,58 @@ namespace VideoToText
                 //int requestTotal = 0;
                 AppendLog($"Starting conversion of MP3 to text for file: '{fileName}'.");
 
-                using (var writer = new StreamWriter(outputPath, append: false, Encoding.UTF8))
+                using (var wordDocument = WordprocessingDocument.Create(outputPath, WordprocessingDocumentType.Document))
                 {
+                    // Add a main document part. 
+                    MainDocumentPart mainPart = wordDocument.AddMainDocumentPart();
+
+                    // Create the document structure and add some text.
+                    mainPart.Document = new Document();
+                    Body body = mainPart.Document.AppendChild(new Body());
+
+                    // Add styles part to the document.
+                    StyleDefinitionsPart styleDefinitionsPart = mainPart.AddNewPart<StyleDefinitionsPart>();
+                    styleDefinitionsPart.Styles = new Styles();
+
+                    // Create a new style (Heading 1) for the file name.
+                    Style style = new Style()
+                    {
+                        Type = StyleValues.Paragraph,
+                        StyleId = "Title1",   // ID for the style
+                        CustomStyle = true
+                    };
+
+                    // Set the name for the style
+                    style.Append(new StyleName() { Val = "Title1" });
+
+                    // Set style properties
+                    StyleRunProperties styleRunProperties1 = new StyleRunProperties();
+                    styleRunProperties1.Append(new RunFonts() { Ascii = "Cambria (Headings)" }); // Font type
+                    styleRunProperties1.Append(new FontSize() { Val = "52" });       // Font size in half-points (24 points = 48 half-points)
+                    styleRunProperties1.Append(new Color() { Val = "173657" });
+                    // Add run properties to the style
+                    style.Append(styleRunProperties1);
+
+                    // Append the style to the Styles part
+                    styleDefinitionsPart.Styles.Append(style);
+
+                    // Create a paragraph for the file name with Heading1 style
+                    Paragraph fileNameParagraph = new Paragraph();
+                    ParagraphProperties fileNameParaProperties = new ParagraphProperties();
+                    fileNameParaProperties.ParagraphStyleId = new ParagraphStyleId() { Val = "Title1" }; // Apply the heading style
+
+                    fileNameParagraph.Append(fileNameParaProperties); // Apply properties to the paragraph
+                    Run fileNameRun = fileNameParagraph.AppendChild(new Run());
+                    fileNameRun.AppendChild(new Text(fileName.RemoveAfterBracket())); // Add the fileName text
+
+                    // Append file name paragraph to the body
+                    body.AppendChild(fileNameParagraph);
+
+                    Paragraph para = body.AppendChild(new Paragraph());
+                    Run run = para.AppendChild(new Run());
+
                     while (true)
                     {
-                        //// Respect RPM limit
-                        //while (Interlocked.Increment(ref rpmCounter) > rpmLimit)
-                        //{
-                        //    await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                        //}
-                        //Interlocked.Increment(ref rpmCounter);
-
                         var stopwatch = new Stopwatch(); // Start tracking time
                         stopwatch.Start();
 
@@ -641,7 +691,7 @@ namespace VideoToText
                         {
                             if (response.Text == null)
                             {
-                                writer.Close();
+                                wordDocument.Dispose();
                                 throw new InvalidOperationException("Failed to retrieve valid response.");
                             }
 
@@ -649,8 +699,7 @@ namespace VideoToText
                             responseBuilder.Append(response.Text);
                             tokenCount += response?.UsageMetadata?.CandidatesTokenCount ?? 0;
 
-                            await writer.WriteAsync(response.Text);
-                            writer.Flush();
+                            run.Append(response.Text);
                         }
 
                         if (tokenCount < MaxOutputTokens)
@@ -658,27 +707,19 @@ namespace VideoToText
 
                         stopwatch.Stop(); // End tracking time
 
-                        // If the batch took less than 1 minute, wait until the 1 minute mark
                         var timeElapsed = stopwatch.ElapsedMilliseconds;
                         var oneMinuteInMilliseconds = 60 * 1000;
                         if (rpmCounter == rpmLimit && timeElapsed < oneMinuteInMilliseconds)
                         {
-                            //var delayTime = oneMinuteInMilliseconds - (int)timeElapsed;
-                            //await Task.Delay(delayTime, cancellationToken);
                             var delayTime = oneMinuteInMilliseconds - (int)timeElapsed;
-
-                            // Convert delayTime to seconds, rounding up to ensure we wait enough
                             int delayTimeInSeconds = (int)Math.Ceiling(delayTime / 1000.0);
 
-                            // Log the waiting time in 1-second intervals
                             for (int i1 = 0; i1 < delayTimeInSeconds; i1++)
                             {
                                 AppendLog($"Pausing for {delayTimeInSeconds - i1} seconds due to reaching the {theoreticalRpmLimit} RPM (requests per minute) limit...");
-
                                 await Task.Delay(1000, cancellationTokenSource.Token);
                             }
 
-                            // reset request total
                             Interlocked.Exchange(ref rpmCounter, 0);
                         }
 
@@ -689,11 +730,12 @@ namespace VideoToText
                         index++;
 
                         Interlocked.Increment(ref rpmCounter);
-                        //requestTotal++;
                     }
 
+                    //document.Save();
                     AppendLog($"\r\nCompleted conversion of MP3 to text for file: '{fileName}'. \r\nOutput saved at: '{outputPath}'.");
                 }
+
 
                 await model.DeleteFile(audioFile.Name);
             }
@@ -715,6 +757,15 @@ namespace VideoToText
                         }
                         File.Move(outputPath, failedOutputPath);
                         AppendLog($"\r\nConversion failed for file: '{fileName}'. \r\nOutput saved at: '{failedOutputPath}'.");
+
+                        // Define the path for the log file (you can customize this path)
+                        string logFilePath = Path.Combine(failedOutputPath, "failed_files_log.txt");
+
+                        // Append the file name to the log file
+                        using (StreamWriter sw = File.AppendText(logFilePath))
+                        {
+                            sw.WriteLine($"{DateTime.Now}: Conversion failed for file: '{fileName}'");
+                        }
                     }
                 }
                 catch (Exception renameEx)
@@ -786,10 +837,6 @@ namespace VideoToText
             if (payAsYouGoCheckBox.Checked)
             {
                 freeCheckBox.Checked = false;
-                if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
-                {
-                    InitializeGenerativeAI();
-                }
             }
         }
 
@@ -798,20 +845,16 @@ namespace VideoToText
             if (freeCheckBox.Checked)
             {
                 payAsYouGoCheckBox.Checked = false;
-                if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
-                {
-                    InitializeGenerativeAI();
-                }
             }
         }
 
-        private void modelComboBox_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
-            {
-                InitializeGenerativeAI();
-            }
-        }
+        //private void modelComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        //{
+        //    if (!string.IsNullOrEmpty(apiKeyTextBox.Text.Trim()))
+        //    {
+        //        InitializeGenerativeAI();
+        //    }
+        //}
     }
 
     public class VideoInfo

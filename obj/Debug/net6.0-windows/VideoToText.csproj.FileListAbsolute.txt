@@ -33,3 +33,6 @@ D:\Testing Youtube Subtitle - FFmpeg\VideoToText\obj\Debug\net6.0-windows\VideoT
 D:\Testing Youtube Subtitle - FFmpeg\VideoToText\obj\Debug\net6.0-windows\VideoToText.genruntimeconfig.cache
 D:\Testing Youtube Subtitle - FFmpeg\VideoToText\obj\Debug\net6.0-windows\ref\VideoToText.dll
 D:\Testing Youtube Subtitle - FFmpeg\VideoToText\obj\Debug\net6.0-windows\VideoToText.sourcelink.json
+D:\Testing Youtube Subtitle - FFmpeg\VideoToText\bin\Debug\net6.0-windows\DocumentFormat.OpenXml.dll
+D:\Testing Youtube Subtitle - FFmpeg\VideoToText\bin\Debug\net6.0-windows\DocumentFormat.OpenXml.Framework.dll
+D:\Testing Youtube Subtitle - FFmpeg\VideoToText\bin\Debug\net6.0-windows\System.IO.Packaging.dll
