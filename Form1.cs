@@ -675,6 +675,7 @@ namespace VideoToText
 
                     Paragraph para = body.AppendChild(new Paragraph());
                     Run run = para.AppendChild(new Run());
+                    run.AppendChild(new Break());
 
                     while (true)
                     {
@@ -759,12 +760,12 @@ namespace VideoToText
                         AppendLog($"\r\nConversion failed for file: '{fileName}'. \r\nOutput saved at: '{failedOutputPath}'.");
 
                         // Define the path for the log file (you can customize this path)
-                        string logFilePath = Path.Combine(failedOutputPath, "failed_files_log.txt");
+                        string logFilePath = Path.Combine(failedDirectory, "failed_files_log.txt");
 
                         // Append the file name to the log file
                         using (StreamWriter sw = File.AppendText(logFilePath))
                         {
-                            sw.WriteLine($"{DateTime.Now}: Conversion failed for file: '{fileName}'");
+                            sw.WriteLine($"https://www.youtube.com/watch?v={fileName.ExtractIdentifier()}");
                         }
                     }
                 }

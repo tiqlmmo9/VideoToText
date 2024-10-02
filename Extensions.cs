@@ -36,6 +36,26 @@ namespace VideoToText
             return index != -1 ? input.Substring(0, index).Trim() : input;
         }
 
+        public static string ExtractIdentifier(this string input)
+        {
+            // Check if the input string is null or empty
+            if (string.IsNullOrEmpty(input))
+                return string.Empty;
+
+            // Find the opening and closing brackets
+            int startIndex = input.IndexOf('[');
+            int endIndex = input.IndexOf(']', startIndex);
+
+            // If brackets are found, extract the substring between them
+            if (startIndex != -1 && endIndex != -1 && endIndex > startIndex)
+            {
+                return input.Substring(startIndex + 1, endIndex - startIndex - 1);
+            }
+
+            // Return an empty string if no valid identifier is found
+            return string.Empty;
+        }
+
         public static Text Append(this Run run, string text)
         {
             Text lastText = null;
