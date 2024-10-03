@@ -3,6 +3,8 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using FFMpegCore;
 using Mscc.GenerativeAI;
+using NPOI.OpenXmlFormats.Wordprocessing;
+using NPOI.XWPF.UserModel;
 using System.Data;
 using System.Diagnostics;
 using System.Text;
@@ -605,8 +607,6 @@ namespace VideoToText
 
             try
             {
-                //await semaphore.WaitAsync(cancellationToken); // Wait for the semaphore
-
                 var uploadMediaResponse = await model.UploadFile(inputPath, cancellationToken: cancellationToken);
                 AppendLog($"Upload of file: '{fileName}' completed successfully.");
 
@@ -620,66 +620,50 @@ namespace VideoToText
                 }
 
                 var request = new GenerateContentRequest(promptTextBox.Text.Trim());
-                request.AddMedia(audioFile); // Add the media file to the request initially
+                request.AddMedia(audioFile);
 
                 int index = 1;
-                //int requestTotal = 0;
                 AppendLog($"Starting conversion of MP3 to text for file: '{fileName}'.");
 
-                using (var wordDocument = WordprocessingDocument.Create(outputPath, WordprocessingDocumentType.Document))
+                using (var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write))
                 {
-                    // Add a main document part. 
-                    MainDocumentPart mainPart = wordDocument.AddMainDocumentPart();
-
-                    // Create the document structure and add some text.
-                    mainPart.Document = new Document();
-                    Body body = mainPart.Document.AppendChild(new Body());
-
-                    // Add styles part to the document.
-                    StyleDefinitionsPart styleDefinitionsPart = mainPart.AddNewPart<StyleDefinitionsPart>();
-                    styleDefinitionsPart.Styles = new Styles();
-
-                    // Create a new style (Heading 1) for the file name.
-                    Style style = new Style()
-                    {
-                        Type = StyleValues.Paragraph,
-                        StyleId = "Title1",   // ID for the style
-                        CustomStyle = true
-                    };
-
-                    // Set the name for the style
-                    style.Append(new StyleName() { Val = "Title1" });
-
-                    // Set style properties
-                    StyleRunProperties styleRunProperties1 = new StyleRunProperties();
-                    styleRunProperties1.Append(new RunFonts() { Ascii = "Cambria (Headings)" }); // Font type
-                    styleRunProperties1.Append(new FontSize() { Val = "52" });       // Font size in half-points (24 points = 48 half-points)
-                    styleRunProperties1.Append(new Color() { Val = "173657" });
-                    // Add run properties to the style
-                    style.Append(styleRunProperties1);
-
-                    // Append the style to the Styles part
-                    styleDefinitionsPart.Styles.Append(style);
+                    var document = new XWPFDocument();
 
                     // Create a paragraph for the file name with Heading1 style
-                    Paragraph fileNameParagraph = new Paragraph();
-                    ParagraphProperties fileNameParaProperties = new ParagraphProperties();
-                    fileNameParaProperties.ParagraphStyleId = new ParagraphStyleId() { Val = "Title1" }; // Apply the heading style
+                    var titleParagraph = document.CreateParagraph();
+                    titleParagraph.Style = "Title";
 
-                    fileNameParagraph.Append(fileNameParaProperties); // Apply properties to the paragraph
-                    Run fileNameRun = fileNameParagraph.AppendChild(new Run());
-                    fileNameRun.AppendChild(new Text(fileName.RemoveAfterBracket())); // Add the fileName text
+                    // Set paragraph properties
+                    titleParagraph.Alignment = ParagraphAlignment.LEFT;
+                    titleParagraph.SpacingAfter = 15; // Space After: 15 pt
+                    titleParagraph.SpacingLineRule = LineSpacingRule.AUTO; // Line spacing: single
+                    titleParagraph.IndentFromLeft = 0; // Don't add space between paragraphs of the same style
 
-                    // Append file name paragraph to the body
-                    body.AppendChild(fileNameParagraph);
+                    // Create a run for the title text
+                    var fileNameRun = titleParagraph.CreateRun();
+                    fileNameRun.SetText(fileName.RemoveAfterBracket());
+                    fileNameRun.SetFontFamily("Cambria (Headings)", FontCharRange.Ascii);
+                    fileNameRun.SetFontFamily("Cambria (Headings)", FontCharRange.HAnsi);
+                    // Set run properties
+                    fileNameRun.FontSize = 24; // 26 pt
+                    fileNameRun.SetColor("17365D"); // Text 2 color
+                    //fileNameRun.IsBold = true; // Assuming bold for headings
+                    fileNameRun.Kerning = 14; // Kern at 14 pt
+                    fileNameRun.CharacterSpacing = 25; // Expanded by 0.25 pt (in 1/20th of a point)
 
-                    Paragraph para = body.AppendChild(new Paragraph());
-                    Run run = para.AppendChild(new Run());
-                    run.AppendChild(new Break());
+                    var paragraph = document.CreateParagraph();
+                    var run = paragraph.CreateRun();
+                    run.AddCarriageReturn();
+
+                    // Set the font family to "Times New Roman"
+                    run.SetFontFamily("Times New Roman", FontCharRange.Ascii);
+                    run.SetFontFamily("Times New Roman", FontCharRange.HAnsi);
+
+                    run.FontSize = 14;
 
                     while (true)
                     {
-                        var stopwatch = new Stopwatch(); // Start tracking time
+                        var stopwatch = new Stopwatch();
                         stopwatch.Start();
 
                         var responseStream = model.GenerateContentStream(request, cancellationToken: cancellationToken);
@@ -692,7 +676,8 @@ namespace VideoToText
                         {
                             if (response.Text == null)
                             {
-                                wordDocument.Dispose();
+                                document.Close();
+                                fileStream.Close();
                                 throw new InvalidOperationException("Failed to retrieve valid response.");
                             }
 
@@ -700,13 +685,13 @@ namespace VideoToText
                             responseBuilder.Append(response.Text);
                             tokenCount += response?.UsageMetadata?.CandidatesTokenCount ?? 0;
 
-                            run.Append(response.Text);
+                            run.AppendTextForNPOI(response.Text);
                         }
 
                         if (tokenCount < MaxOutputTokens)
                             break;
 
-                        stopwatch.Stop(); // End tracking time
+                        stopwatch.Stop();
 
                         var timeElapsed = stopwatch.ElapsedMilliseconds;
                         var oneMinuteInMilliseconds = 60 * 1000;
@@ -733,17 +718,15 @@ namespace VideoToText
                         Interlocked.Increment(ref rpmCounter);
                     }
 
-                    //document.Save();
+                    document.Write(fileStream);
                     AppendLog($"\r\nCompleted conversion of MP3 to text for file: '{fileName}'. \r\nOutput saved at: '{outputPath}'.");
                 }
-
 
                 await model.DeleteFile(audioFile.Name);
             }
             catch (Exception ex)
             {
                 AppendLog($"Error during conversion: {ex.Message}");
-                // Rename the output file with the "FAILED" suffix
                 try
                 {
                     if (File.Exists(outputPath))
@@ -759,10 +742,7 @@ namespace VideoToText
                         File.Move(outputPath, failedOutputPath);
                         AppendLog($"\r\nConversion failed for file: '{fileName}'. \r\nOutput saved at: '{failedOutputPath}'.");
 
-                        // Define the path for the log file (you can customize this path)
                         string logFilePath = Path.Combine(failedDirectory, "failed_files_log.txt");
-
-                        // Append the file name to the log file
                         using (StreamWriter sw = File.AppendText(logFilePath))
                         {
                             sw.WriteLine($"https://www.youtube.com/watch?v={fileName.ExtractIdentifier()}");
@@ -773,11 +753,6 @@ namespace VideoToText
                 {
                     AppendLog($"\r\nFailed to rename output file after error: {renameEx.Message}");
                 }
-                //finally
-                //{
-                //    //await Task.Delay(timerIntervalMilliseconds);
-                //    semaphore.Release(); // Release the semaphore
-                //}
             }
         }
 

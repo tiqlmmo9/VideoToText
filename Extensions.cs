@@ -1,5 +1,6 @@
 ﻿using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Wordprocessing;
+using NPOI.XWPF.UserModel;
 
 namespace VideoToText
 {
@@ -92,6 +93,32 @@ namespace VideoToText
         public static void AppendBreak(this Run run)
         {
             run.Append(new Break());
+        }
+
+        // Append text to a Run with automatic line breaks
+        public static void AppendTextForNPOI(this XWPFRun run, string text)
+        {
+            if (text == null)
+            {
+                return; // Do nothing for null text
+            }
+
+            // Split the text into lines based on different line break characters
+            var lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+            for (int index = 0; index < lines.Length; index++)
+            {
+                var line = lines[index];
+
+                // If not the first line, insert a line break
+                if (index > 0)
+                {
+                    run.AddCarriageReturn(); // Add a line break
+                }
+
+                // Add the text of the line
+                run.AppendText(line); // Set the text for the line
+            }
         }
     }
 }
