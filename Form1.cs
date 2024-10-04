@@ -512,6 +512,20 @@ namespace VideoToText
                 var result = await ytdl.RunAudioDownload($"https://www.youtube.com/watch?v={video.ID}", ct: cancellationToken, progress: progressHandler);
 
                 AppendLog(result.Success ? $"Downloaded: {video.Title}" : $"Failed to download: {video.Title}");
+
+                if (!result.Success)
+                {
+                    AppendLog($"Failed to download: https://www.youtube.com/watch?v={video.ID} {video.Title}");
+
+                    var failedDirectory = Path.Combine(outputDirectory, "Failed download files");
+                    Directory.CreateDirectory(failedDirectory);
+
+                    string logFilePath = Path.Combine(failedDirectory, "failed_download_files_log.txt");
+                    using (StreamWriter sw = File.AppendText(logFilePath))
+                    {
+                        sw.WriteLine($"https://www.youtube.com/watch?v={video.ID}");
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -562,15 +576,17 @@ namespace VideoToText
 
         private async Task ConvertToMp3Async(string inputFilePath, string outputFilePath)
         {
+            var fileName = Path.GetFileName(inputFilePath);
+
             try
             {
                 var analysis = await FFProbe.AnalyseAsync(inputFilePath);
 
-                void OnPercentageProgess(double percentage)
+                void OnPercentageProgress(double percentage)
                 {
                     if (percentage < 100)
                     {
-                        AppendLog($"Converting to MP3 -- {Path.GetFileName(inputFilePath)}: {percentage}%");
+                        AppendLog($"Converting to MP3 -- {fileName}: {percentage}%");
                     }
                 }
 
@@ -578,12 +594,23 @@ namespace VideoToText
                     .FromFileInput(inputFilePath)
                     .OutputToFile(outputFilePath, true, options => options
                         .WithAudioBitrate(48).WithDuration(analysis.Duration))
-                    .NotifyOnProgress(OnPercentageProgess, analysis.Duration)
+                    .NotifyOnProgress(OnPercentageProgress, analysis.Duration)
                     .ProcessAsynchronously();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error converting {inputFilePath}: {ex.Message}");
+                MessageBox.Show($"Error converting to MP3 {inputFilePath}: {ex.Message}");
+
+                AppendLog($"Error converting to MP3 -- {fileName}");
+
+                var failedDirectory = Path.Combine(Path.GetDirectoryName(outputFilePath), "Failed converting to MP3 files");
+                Directory.CreateDirectory(failedDirectory);
+
+                string logFilePath = Path.Combine(failedDirectory, "failed_convert_to_mp3_files_log.txt");
+                using (StreamWriter sw = File.AppendText(logFilePath))
+                {
+                    sw.WriteLine(fileName);
+                }
             }
         }
 

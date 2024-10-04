@@ -9,6 +9,7 @@ obj/
 *.user
 *.lock.json
 
+
 # Visual Studio files
 .vs/
 .vscode/
